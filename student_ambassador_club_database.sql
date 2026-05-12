@@ -1,6 +1,7 @@
 -- Database for Student Ambassador Club Management
 -- Worksheet 12 - PHP + MySQL Backend Task
 -- Topic: Cau lac bo Dai su Sinh vien
+-- Version: Updated with point_transactions for clear point flow
 
 DROP DATABASE IF EXISTS student_ambassador_club;
 CREATE DATABASE student_ambassador_club
@@ -123,7 +124,7 @@ CREATE TABLE events (
 
 -- =====================================================
 -- 6. DANG KY THAM GIA SU KIEN
--- Business rule can implement in PHP:
+-- Business rule:
 -- - khong cho dang ky trung event_id + member_id
 -- - khong cho dang ky neu su kien da du capacity
 -- =====================================================
@@ -179,7 +180,7 @@ CREATE TABLE event_assignments (
 
 -- =====================================================
 -- 8. CHECK-IN SU KIEN
--- Business rule can implement in PHP:
+-- Business rule:
 -- - mot thanh vien chi duoc check-in 1 lan cho 1 su kien
 -- =====================================================
 CREATE TABLE checkin_logs (
@@ -267,10 +268,16 @@ CREATE TABLE task_assignments (
 
 -- =====================================================
 -- 11. QUY TAC TINH DIEM DONG GOP
+-- Bang cau hinh: moi loai hoat dong duoc bao nhieu diem
 -- =====================================================
 CREATE TABLE activity_point_rules (
     rule_id INT AUTO_INCREMENT PRIMARY KEY,
-    activity_type ENUM('event_checkin', 'event_assignment_completed', 'task_approved', 'training_completed') NOT NULL,
+    activity_type ENUM(
+        'event_checkin',
+        'event_assignment_completed',
+        'task_approved',
+        'training_completed'
+    ) NOT NULL,
     rule_name VARCHAR(150) NOT NULL,
     points INT NOT NULL,
     description TEXT,
@@ -281,8 +288,45 @@ CREATE TABLE activity_point_rules (
 ) ENGINE=InnoDB;
 
 -- =====================================================
--- 12. DIEM DONG GOP CUA THANH VIEN
--- total_points co the duoc cap nhat sau khi check-in/hoan thanh nhiem vu
+-- 12. LICH SU CONG/TRU DIEM
+-- Bang nay noi activity_point_rules voi club_members
+-- source_type + source_id cho biet diem den tu check-in, task hay training
+-- =====================================================
+CREATE TABLE point_transactions (
+    transaction_id INT AUTO_INCREMENT PRIMARY KEY,
+    member_id INT NOT NULL,
+    rule_id INT NOT NULL,
+    source_type ENUM(
+        'event_checkin',
+        'event_assignment',
+        'task',
+        'training',
+        'manual'
+    ) NOT NULL,
+    source_id INT NOT NULL,
+    points INT NOT NULL,
+    note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT uq_point_source UNIQUE (member_id, source_type, source_id),
+
+    CONSTRAINT fk_point_transactions_member
+        FOREIGN KEY (member_id)
+        REFERENCES club_members(member_id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE,
+
+    CONSTRAINT fk_point_transactions_rule
+        FOREIGN KEY (rule_id)
+        REFERENCES activity_point_rules(rule_id)
+        ON DELETE RESTRICT
+        ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+-- =====================================================
+-- 13. DIEM DONG GOP CUA THANH VIEN
+-- Bang tong hop diem theo hoc ky
+-- Diem chi tiet nam trong point_transactions
 -- =====================================================
 CREATE TABLE student_points (
     point_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -290,12 +334,15 @@ CREATE TABLE student_points (
     semester VARCHAR(30) NOT NULL,
     total_points INT NOT NULL DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
     CONSTRAINT uq_member_semester UNIQUE (member_id, semester),
+
     CONSTRAINT fk_student_points_member
         FOREIGN KEY (member_id)
         REFERENCES club_members(member_id)
         ON DELETE RESTRICT
         ON UPDATE CASCADE,
+
     CONSTRAINT chk_total_points CHECK (total_points >= 0)
 ) ENGINE=InnoDB;
 
@@ -351,7 +398,26 @@ INSERT INTO activity_point_rules (activity_type, rule_name, points, description,
 ('task_approved', 'Diem hoan thanh nhiem vu CLB', 10, 'Nhiem vu duoc duyet hoan thanh boi nguoi phu trach', 'active'),
 ('training_completed', 'Diem tham gia tap huan', 5, 'Thanh vien hoan thanh buoi tap huan', 'active');
 
-INSERT INTO student_points (member_id, semester, total_points) VALUES
-(1, 'Spring 2026', 0),
-(2, 'Spring 2026', 5),
-(3, 'Spring 2026', 0);
+-- Tao lich su diem tu check-in da co
+INSERT INTO point_transactions
+(member_id, rule_id, source_type, source_id, points, note)
+SELECT
+    cl.member_id,
+    apr.rule_id,
+    'event_checkin',
+    cl.checkin_id,
+    apr.points,
+    CONCAT('Cong diem check-in cho event_id = ', cl.event_id)
+FROM checkin_logs cl
+JOIN activity_point_rules apr
+    ON apr.activity_type = 'event_checkin'
+WHERE apr.status = 'active';
+
+-- Tao tong diem theo hoc ky tu point_transactions
+INSERT INTO student_points (member_id, semester, total_points)
+SELECT
+    member_id,
+    'Spring 2026',
+    SUM(points)
+FROM point_transactions
+GROUP BY member_id;
