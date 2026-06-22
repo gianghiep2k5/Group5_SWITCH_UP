@@ -36,22 +36,22 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- Admin
 INSERT INTO users (id, full_name, email, password_hash, role, parent_id) VALUES
 (1, 'Nguyễn Văn Admin', 'admin@uni.edu.vn',
- '$2y$12$q2Wb3pPtjGFeoGZ7zwrQO.6hbPD6KVuYRrpmsCWhwan161bmmMKOO', 'admin', NULL);
+ '$2y$10$13j7sPch9tLtvqd2cqK0je1C72F9UEEKHutViswp5INow873he01C', 'admin', NULL);
 
 -- Giáo viên (parent_id = 1, do admin tạo)
 INSERT INTO users (id, full_name, email, password_hash, role, parent_id) VALUES
 (2, 'TS. Trần Thị Hương', 'huong.tt@uni.edu.vn',
- '$2y$12$q2Wb3pPtjGFeoGZ7zwrQO.6hbPD6KVuYRrpmsCWhwan161bmmMKOO', 'teacher', 1),
+ '$2y$10$13j7sPch9tLtvqd2cqK0je1C72F9UEEKHutViswp5INow873he01C', 'teacher', 1),
 (3, 'ThS. Lê Quang Minh',  'minh.lq@uni.edu.vn',
- '$2y$12$q2Wb3pPtjGFeoGZ7zwrQO.6hbPD6KVuYRrpmsCWhwan161bmmMKOO', 'teacher', 1);
+ '$2y$10$13j7sPch9tLtvqd2cqK0je1C72F9UEEKHutViswp5INow873he01C', 'teacher', 1);
 
 -- Sinh viên
 INSERT INTO users (id, full_name, email, password_hash, role) VALUES
-(10, 'Phạm Hoàng An',    'an.ph@student.uni.edu.vn',    '$2y$12$q2Wb3pPtjGFeoGZ7zwrQO.6hbPD6KVuYRrpmsCWhwan161bmmMKOO', 'student'),
-(11, 'Vũ Thị Bình',       'binh.vt@student.uni.edu.vn',  '$2y$12$q2Wb3pPtjGFeoGZ7zwrQO.6hbPD6KVuYRrpmsCWhwan161bmmMKOO', 'student'),
-(12, 'Đặng Quốc Cường',   'cuong.dq@student.uni.edu.vn', '$2y$12$q2Wb3pPtjGFeoGZ7zwrQO.6hbPD6KVuYRrpmsCWhwan161bmmMKOO', 'student'),
-(13, 'Hoàng Thị Diệu',    'dieu.ht@student.uni.edu.vn',  '$2y$12$q2Wb3pPtjGFeoGZ7zwrQO.6hbPD6KVuYRrpmsCWhwan161bmmMKOO', 'student'),
-(14, 'Lý Minh Đạt',       'dat.lm@student.uni.edu.vn',   '$2y$12$q2Wb3pPtjGFeoGZ7zwrQO.6hbPD6KVuYRrpmsCWhwan161bmmMKOO', 'student');
+(10, 'Phạm Hoàng An',    'an.ph@student.uni.edu.vn',    '$2y$10$13j7sPch9tLtvqd2cqK0je1C72F9UEEKHutViswp5INow873he01C', 'student'),
+(11, 'Vũ Thị Bình',       'binh.vt@student.uni.edu.vn',  '$2y$10$13j7sPch9tLtvqd2cqK0je1C72F9UEEKHutViswp5INow873he01C', 'student'),
+(12, 'Đặng Quốc Cường',   'cuong.dq@student.uni.edu.vn', '$2y$10$13j7sPch9tLtvqd2cqK0je1C72F9UEEKHutViswp5INow873he01C', 'student'),
+(13, 'Hoàng Thị Diệu',    'dieu.ht@student.uni.edu.vn',  '$2y$10$13j7sPch9tLtvqd2cqK0je1C72F9UEEKHutViswp5INow873he01C', 'student'),
+(14, 'Lý Minh Đạt',       'dat.lm@student.uni.edu.vn',   '$2y$10$13j7sPch9tLtvqd2cqK0je1C72F9UEEKHutViswp5INow873he01C', 'student');
 
 -- ---------------------------------------------------------------------
 -- 2. COURSES
