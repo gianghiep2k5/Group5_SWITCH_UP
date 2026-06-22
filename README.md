@@ -1,4 +1,4 @@
-# Student Service Hub — Web2 Full Project
+# VNUIS Smart Learning Support Hub
 
 Dự án Web2: **PHP + MySQL + Session + CRUD + Python AI microservice**.
 
