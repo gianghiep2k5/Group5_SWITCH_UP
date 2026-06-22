@@ -1,28 +1,23 @@
-# AI Service
+# Python AI Service
 
-Đây là service Python phụ cho chatbot. Ứng dụng Web2 chính vẫn là PHP + MySQL.
+This service is optional but recommended for the chatbot.
 
-## Chạy nhanh trên Windows
+## Run
 
 ```bat
 cd C:\xampp\htdocs\learning_management_full\ai_service
+copy .env.example .env
+notepad .env
 start_ai_service.bat
 ```
 
-Sau lần chạy đầu tiên, mở file `.env` và cấu hình:
+Open http://127.0.0.1:8010/health to test.
 
-```env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=your_new_key_here
-OPENAI_MODEL=gpt-4o-mini
-```
+## Endpoints
 
-Không commit file `.env` lên GitHub.
+- `POST /ask`: generate chatbot answer from question + lesson contexts + history.
+- `POST /extract`: extract text from uploaded lesson files. PHP uses this when Admin uploads PDF knowledge in Learning Content.
 
-## Kiểm tra
+## File extraction
 
-Mở trình duyệt:
-
-```txt
-http://127.0.0.1:8010/health
-```
+PDF extraction requires `pypdf`, included in `requirements.txt`. For PDF upload from PHP, start this service first.

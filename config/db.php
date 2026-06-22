@@ -4,7 +4,7 @@ require_once __DIR__ . '/app.php';
 $DB_HOST = '127.0.0.1';
 $DB_NAME = 'ds_chatbot';
 $DB_USER = 'root';
-$DB_PASS = ''; 
+$DB_PASS = ''; // XAMPP thường để trống. Nếu có mật khẩu thì sửa ở đây.
 $DB_CHARSET = 'utf8mb4';
 
 $dsn = "mysql:host={$DB_HOST};dbname={$DB_NAME};charset={$DB_CHARSET}";

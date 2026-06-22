@@ -29,7 +29,7 @@ function nav_group(string $label, array $items): void {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= e($title) ?> - <?= e(APP_NAME) ?></title>
-    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css">
+    <link rel="stylesheet" href="<?= BASE_URL ?>/assets/css/style.css?v=<?= @filemtime(__DIR__ . '/../assets/css/style.css') ?: time() ?>">
 </head>
 <body>
 <div class="app-shell">
@@ -65,6 +65,7 @@ function nav_group(string $label, array $items): void {
                         ['/teacher/classes.php', 'My Classes', '▣'],
                         ['/teacher/students.php', 'Students & Chats', '◌'],
                         ['/teacher/schedules.php', 'Schedule', '◷'],
+                        ['/teacher/lessons.php', 'Learning Content', '✦'],
                     ]); ?>
                     <?php nav_group('Student Insight', [
                         ['/teacher/alerts.php', 'Alerts', '◇'],

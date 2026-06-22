@@ -1,7 +1,7 @@
 <?php
 // Cấu hình chung. Nếu folder trong htdocs của bạn khác, sửa BASE_URL cho đúng.
-define('APP_NAME', 'International School_VNUIS');
-define('APP_SUBTITLE', 'Student Service Hub');
+define('APP_NAME', 'Student Service Hub');
+define('APP_SUBTITLE', 'Data Science Learning Support');
 define('BASE_URL', '/learning_management_full');
 define('DEFAULT_PASSWORD', '123456');
 
@@ -20,8 +20,11 @@ if (file_exists($aiLocalFile)) {
 if (!defined('AI_PROVIDER')) {
     define('AI_PROVIDER', getenv('AI_PROVIDER') ?: 'python'); // python | local
 }
+if (!defined('AI_SERVICE_BASE_URL')) {
+    define('AI_SERVICE_BASE_URL', getenv('AI_SERVICE_BASE_URL') ?: 'http://127.0.0.1:8010');
+}
 if (!defined('AI_SERVICE_URL')) {
-    define('AI_SERVICE_URL', getenv('AI_SERVICE_URL') ?: 'http://127.0.0.1:8010/ask');
+    define('AI_SERVICE_URL', rtrim(AI_SERVICE_BASE_URL, '/') . '/ask');
 }
 if (!defined('AI_TIMEOUT')) {
     define('AI_TIMEOUT', (int)(getenv('AI_TIMEOUT') ?: 35));

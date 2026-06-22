@@ -33,10 +33,10 @@ $title = 'Sign in';
     <section class="login-hero">
         <div>
             <img src="<?= BASE_URL ?>/assets/img/logo.png" alt="VNUIIS logo">
-            <h1><?= e(APP_NAME) ?></h1>
-            <p><?= e(APP_SUBTITLE) ?> for courses, schedules, learning chat history and teacher alerts.</p>
+            <h1>Student Service Hub</h1>
+            <p>One simple workspace for Data Science classes, schedules, learning chat history and teacher alerts.</p>
         </div>
-        <p class="help" style="color:#d7e0ef">A focused service workspace for administrators, lecturers and students.</p>
+        <p class="help" style="color:#d7e0ef">A focused learning support space for administrators, lecturers and students.</p>
     </section>
     <section class="card login-card">
         <h2>Welcome back</h2>

@@ -43,11 +43,13 @@ if ($role === 'admin') {
         ['Students', count_query($pdo, 'SELECT COUNT(DISTINCT cs.student_id) FROM class_students cs JOIN classes c ON c.id=cs.class_id WHERE c.teacher_id=? AND cs.status="active"', [$tid]), 'Active students in your classes.'],
         ['Unread Alerts', count_query($pdo, 'SELECT COUNT(*) FROM teacher_alerts WHERE teacher_id=? AND is_read=0', [$tid]), 'Learning problems waiting for review.'],
         ['Questions', count_query($pdo, 'SELECT COUNT(*) FROM chat_messages m JOIN chat_sessions s ON s.id=m.session_id JOIN class_students cs ON cs.student_id=s.student_id JOIN classes c ON c.id=cs.class_id WHERE c.teacher_id=? AND m.sender="student"', [$tid]), 'Questions asked by your students.'],
+        ['Lessons', count_query($pdo, 'SELECT COUNT(DISTINCT l.id) FROM lessons l JOIN classes c ON c.course_id=l.course_id WHERE c.teacher_id=?', [$tid]), 'Learning contents in your courses.'],
     ];
     $quickLinks = [
         ['/teacher/classes.php','My classes','View class size, course and recent status.','▣'],
-        ['/teacher/students.php','Class students','Add students to class and update enrollment.','◌'],
+        ['/teacher/students.php','Class students','View students and their chat history.','◌'],
         ['/teacher/schedules.php','Schedule','Plan lessons without time conflicts.','◷'],
+        ['/teacher/lessons.php','Learning content','Add lesson knowledge for your assigned courses.','✦'],
         ['/teacher/alerts.php','Learning alerts','Resolve repeated-question notifications.','◇'],
         ['/teacher/analytics.php','Analytics','Review learning frequency and weak topics.','✦'],
     ];

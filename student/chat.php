@@ -75,7 +75,7 @@ function ensure_student_course(PDO $pdo, int $student_id, int $course_id): bool 
     return (int)$stmt->fetchColumn() > 0;
 }
 
-function retrieve_lessons(PDO $pdo, int $course_id, string $question = '', int $limit = 3): array {
+function retrieve_lessons(PDO $pdo, int $course_id, string $question = '', int $limit = 3, bool $includeZeroScore = true): array {
     $stmt = $pdo->prepare('SELECT * FROM lessons WHERE course_id = ? ORDER BY order_index');
     $stmt->execute([$course_id]);
     $lessons = $stmt->fetchAll();
@@ -85,18 +85,51 @@ function retrieve_lessons(PDO $pdo, int $course_id, string $question = '', int $
         $titleLower = mb_strtolower($lesson['title'], 'UTF-8');
         $contentLower = mb_strtolower($lesson['content'] ?? '', 'UTF-8');
         $score = 0;
+        $matched = [];
         foreach ($tokens as $tok) {
-            if (mb_strpos($titleLower, $tok) !== false) $score += 3;
-            if (mb_strpos($contentLower, $tok) !== false) $score += 1;
+            $tokenMatched = false;
+            if (mb_strpos($titleLower, $tok) !== false) {
+                $score += 3;
+                $tokenMatched = true;
+            }
+            if (mb_strpos($contentLower, $tok) !== false) {
+                $score += 1;
+                $tokenMatched = true;
+            }
+            if ($tokenMatched) $matched[] = $tok;
         }
         $lesson['_score'] = $score;
+        $lesson['_matched_tokens'] = array_values(array_unique($matched));
     }
     unset($lesson);
 
     if ($tokens) {
         usort($lessons, fn($a, $b) => ($b['_score'] <=> $a['_score']) ?: ($a['order_index'] <=> $b['order_index']));
+        if (!$includeZeroScore) {
+            $lessons = array_values(array_filter($lessons, fn($l) => (int)($l['_score'] ?? 0) > 0));
+        }
+    } elseif (!$includeZeroScore) {
+        $lessons = [];
     }
     return array_slice($lessons, 0, $limit);
+}
+
+function get_latest_used_lesson_id(PDO $pdo, int $session_id): ?int {
+    if (!$session_id) return null;
+    $stmt = $pdo->prepare('SELECT lesson_id FROM chat_messages WHERE session_id = ? AND lesson_id IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 1');
+    $stmt->execute([$session_id]);
+    $lessonId = $stmt->fetchColumn();
+    return $lessonId ? (int)$lessonId : null;
+}
+
+function get_lesson_by_id(PDO $pdo, int $lesson_id, int $course_id): ?array {
+    $stmt = $pdo->prepare('SELECT * FROM lessons WHERE id = ? AND course_id = ? LIMIT 1');
+    $stmt->execute([$lesson_id, $course_id]);
+    $lesson = $stmt->fetch();
+    if (!$lesson) return null;
+    $lesson['_score'] = $lesson['_score'] ?? 0;
+    $lesson['_used_in_answer'] = true;
+    return $lesson;
 }
 
 function generate_local_answer(?array $lesson, ?array $topic, string $question): string {
@@ -133,6 +166,72 @@ function get_student_class(PDO $pdo, int $student_id, int $course_id): ?array {
     return $class ?: null;
 }
 
+
+function is_ajax_chat_request(): bool {
+    $requestedWith = $_SERVER['HTTP_X_REQUESTED_WITH'] ?? '';
+    return (isset($_POST['ajax']) && $_POST['ajax'] === '1') || strtolower($requestedWith) === 'xmlhttprequest';
+}
+
+function json_chat_response(array $payload): void {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+}
+
+function build_related_lessons(PDO $pdo, int $course_id, int $session_id = 0, string $lastQuestion = ''): array {
+    $relatedLessons = [];
+    if (!$course_id) return $relatedLessons;
+
+    $seenLessonIds = [];
+    $latestUsedLessonId = $session_id ? get_latest_used_lesson_id($pdo, $session_id) : null;
+    if ($latestUsedLessonId) {
+        $usedLesson = get_lesson_by_id($pdo, $latestUsedLessonId, $course_id);
+        if ($usedLesson) {
+            $relatedLessons[] = $usedLesson;
+            $seenLessonIds[(int)$usedLesson['id']] = true;
+        }
+    }
+
+    $scoredLessons = $lastQuestion ? retrieve_lessons($pdo, $course_id, $lastQuestion, 6, false) : [];
+    foreach ($scoredLessons as $lessonItem) {
+        $lessonId = (int)$lessonItem['id'];
+        if (isset($seenLessonIds[$lessonId])) continue;
+        $relatedLessons[] = $lessonItem;
+        $seenLessonIds[$lessonId] = true;
+        if (count($relatedLessons) >= 4) break;
+    }
+
+    if (!$lastQuestion && !$relatedLessons) {
+        $relatedLessons = retrieve_lessons($pdo, $course_id, '', 4, true);
+    }
+    return $relatedLessons;
+}
+
+function render_related_lessons_html(array $relatedLessons): string {
+    ob_start();
+    if (!$relatedLessons): ?>
+        <div class="related-empty">Chưa có nội dung bài học cho môn này.</div>
+    <?php else: ?>
+        <div class="related-list">
+            <?php foreach ($relatedLessons as $lesson): ?>
+                <article class="related-card <?= !empty($lesson['_used_in_answer']) ? 'related-card-active' : '' ?>">
+                    <strong><?= e($lesson['title']) ?></strong>
+                    <?php if (!empty($lesson['_used_in_answer'])): ?>
+                        <small>Đã dùng trong câu trả lời gần nhất</small>
+                    <?php else: ?>
+                        <small>Khớp câu hỏi: <?= (int)($lesson['_score'] ?? 0) ?></small>
+                    <?php endif; ?>
+                    <?php $preview = clean_course_text($lesson['content'] ?? '', 130); ?>
+                    <?php if ($preview): ?>
+                        <p><?= e($preview) ?><?= mb_strlen(strip_tags($lesson['content'] ?? ''), 'UTF-8') > 130 ? '...' : '' ?></p>
+                    <?php endif; ?>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php endif;
+    return trim(ob_get_clean());
+}
+
 $courses = get_student_courses($pdo, (int)$user['id']);
 $currentSessionId = (int)($_SESSION['current_chat_session_id'] ?? 0);
 $sessionCourseId = course_from_session($pdo, $currentSessionId, (int)$user['id']);
@@ -150,6 +249,7 @@ if (is_post()) {
     $question = trim($_POST['question'] ?? '');
     $session_id = 0;
     $studentMessageSaved = false;
+    $ajax = is_ajax_chat_request();
 
     try {
         if ($question === '') throw new Exception('Please enter a question.');
@@ -172,19 +272,23 @@ if (is_post()) {
             $isNewSession = true;
         }
 
-        // Load history BEFORE adding the new student message, same as DSS FastAPI flow.
         $history = load_chat_history($pdo, $session_id);
         $topic = detect_topic($pdo, $question);
         $lessonHits = retrieve_lessons($pdo, $currentCourse, $question, 3);
         $lesson = $lessonHits[0] ?? null;
+        $bestLessonId = ($lesson && !is_simple_greeting($question) && (int)($lesson['_score'] ?? 0) > 0) ? (int)$lesson['id'] : null;
+
+        $contextHits = array_values(array_filter($lessonHits, fn($hit) => (int)($hit['_score'] ?? 0) > 0));
+        if (!$contextHits && !is_simple_greeting($question) && $lesson) {
+            $contextHits = [$lesson];
+        }
         $lessonContexts = [];
-        foreach ($lessonHits as $hit) {
+        foreach ($contextHits as $hit) {
             $lessonContexts[] = $hit['title'] . ': ' . clean_course_text($hit['content'] ?? '', 1200);
         }
 
-        // Save student message immediately so the UI never loses the user's question.
         $pdo->prepare('INSERT INTO chat_messages(session_id, sender, content, topic_id, lesson_id) VALUES(?,?,?,?,?)')
-            ->execute([$session_id, 'student', $question, $topic['id'] ?? null, $lesson['id'] ?? null]);
+            ->execute([$session_id, 'student', $question, $topic['id'] ?? null, $bestLessonId]);
         $studentMessageSaved = true;
         $pdo->prepare('UPDATE chat_sessions SET message_count = message_count + 1 WHERE id = ? AND student_id = ?')
             ->execute([$session_id, (int)$user['id']]);
@@ -197,7 +301,7 @@ if (is_post()) {
         $responseMs = (int)((microtime(true) - $start) * 1000);
 
         $pdo->prepare('INSERT INTO chat_messages(session_id, sender, content, topic_id, lesson_id, tokens_used, response_time_ms) VALUES(?,?,?,?,?,?,?)')
-            ->execute([$session_id, 'bot', $answer, $topic['id'] ?? null, $lesson['id'] ?? null, mb_strlen($answer, 'UTF-8'), $responseMs]);
+            ->execute([$session_id, 'bot', $answer, $topic['id'] ?? null, $bestLessonId, mb_strlen($answer, 'UTF-8'), $responseMs]);
         $pdo->prepare('UPDATE chat_sessions SET message_count = message_count + 1 WHERE id = ? AND student_id = ?')
             ->execute([$session_id, (int)$user['id']]);
 
@@ -221,6 +325,18 @@ if (is_post()) {
                     ->execute([$class['teacher_id'], $class_id, (int)$user['id'], $topic_id, 'repeat_question', $message, 'high']);
             }
         }
+
+        if ($ajax) {
+            $related = build_related_lessons($pdo, $currentCourse, $session_id, $question);
+            json_chat_response([
+                'ok' => true,
+                'session_id' => $session_id,
+                'question' => $question,
+                'answer' => $answer,
+                'answer_time' => date('H:i'),
+                'related_html' => render_related_lessons_html($related),
+            ]);
+        }
     } catch (Throwable $e) {
         if ($studentMessageSaved && $session_id) {
             try {
@@ -229,8 +345,21 @@ if (is_post()) {
                     ->execute([$session_id, 'bot', $fallback]);
                 $pdo->prepare('UPDATE chat_sessions SET message_count = message_count + 1 WHERE id = ? AND student_id = ?')
                     ->execute([$session_id, (int)$user['id']]);
+                if ($ajax) {
+                    json_chat_response([
+                        'ok' => true,
+                        'session_id' => $session_id,
+                        'question' => $question,
+                        'answer' => $fallback,
+                        'answer_time' => date('H:i'),
+                        'related_html' => render_related_lessons_html(build_related_lessons($pdo, $currentCourse, $session_id, $question)),
+                    ]);
+                }
             } catch (Throwable $ignored) {}
         } else {
+            if ($ajax) {
+                json_chat_response(['ok' => false, 'error' => $e->getMessage()]);
+            }
             flash('error', $e->getMessage());
         }
     }
@@ -249,7 +378,9 @@ $lastQuestion = '';
 foreach (array_reverse($messages) as $msg) {
     if (($msg['sender'] ?? '') === 'student') { $lastQuestion = $msg['content']; break; }
 }
-$relatedLessons = $currentCourse ? retrieve_lessons($pdo, $currentCourse, $lastQuestion, 4) : [];
+
+// Build the related-lesson panel from the latest question/answer, not from a static course list.
+$relatedLessons = $currentCourse ? build_related_lessons($pdo, $currentCourse, $currentSessionId, $lastQuestion) : [];
 $currentCourseRow = null;
 foreach ($courses as $c) {
     if ((int)$c['id'] === (int)$currentCourse) { $currentCourseRow = $c; break; }
@@ -298,7 +429,7 @@ include __DIR__ . '/../includes/header.php';
         <?php if (!$courses): ?>
             <div class="empty-state">Bạn chưa được thêm vào lớp học nào nên chưa thể sử dụng chat.</div>
         <?php else: ?>
-            <form method="post" class="dss-chat-inputbar">
+            <form method="post" class="dss-chat-inputbar" id="chatForm">
                 <?= csrf_field() ?>
                 <input class="chat-input" name="question" placeholder="Nhập câu hỏi của bạn..." autocomplete="off" required>
                 <button class="send-btn" type="submit">Gửi</button>
@@ -311,22 +442,91 @@ include __DIR__ . '/../includes/header.php';
             <span>▣</span>
             <h3>Bài học liên quan</h3>
         </div>
-        <?php if (!$relatedLessons): ?>
-            <div class="related-empty">Chưa có nội dung bài học cho môn này.</div>
-        <?php else: ?>
-            <div class="related-list">
-                <?php foreach ($relatedLessons as $lesson): ?>
-                    <article class="related-card">
-                        <strong><?= e($lesson['title']) ?></strong>
-                        <small>Mức độ liên quan: <?= (int)($lesson['_score'] ?? 0) ?></small>
-                    </article>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
+        <div id="relatedLessonsWrap">
+            <?= render_related_lessons_html($relatedLessons) ?>
+        </div>
     </aside>
 </div>
 <script>
 const chatWindow = document.getElementById('chatWindow');
-if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+const chatForm = document.getElementById('chatForm');
+const relatedLessonsWrap = document.getElementById('relatedLessonsWrap');
+
+function scrollChatToBottom() {
+    if (chatWindow) chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+function appendStudentMessage(text) {
+    const row = document.createElement('div');
+    row.className = 'dss-message-row student-row';
+    row.innerHTML = `<div class="dss-message student-message">${escapeHtml(text)}</div>`;
+    chatWindow.appendChild(row);
+}
+function appendBotMessage(text, timeText, extraClass = '') {
+    const row = document.createElement('div');
+    row.className = `dss-message-row bot-row ${extraClass}`.trim();
+    row.innerHTML = `
+        <div class="message-avatar">AI</div>
+        <div class="dss-message bot-message">
+            ${escapeHtml(text).replace(/\n/g, '<br>')}
+            <div class="message-time">${escapeHtml(timeText || '')}</div>
+        </div>`;
+    chatWindow.appendChild(row);
+    return row;
+}
+scrollChatToBottom();
+
+if (chatForm && chatWindow) {
+    chatForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const input = chatForm.querySelector('input[name="question"]');
+        const button = chatForm.querySelector('button[type="submit"]');
+        const question = (input.value || '').trim();
+        if (!question) return;
+
+        appendStudentMessage(question);
+        input.value = '';
+        input.focus();
+        const typingRow = appendBotMessage('Đang tạo câu trả lời...', '', 'typing-row');
+        scrollChatToBottom();
+
+        button.disabled = true;
+        button.classList.add('send-btn-loading');
+        try {
+            const formData = new FormData(chatForm);
+            formData.set('question', question);
+            formData.set('ajax', '1');
+            const response = await fetch(chatForm.action || window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await response.json();
+            typingRow.remove();
+            if (!data.ok) {
+                appendBotMessage(data.error || 'Có lỗi xảy ra, vui lòng thử lại.', new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+            } else {
+                appendBotMessage(data.answer || '', data.answer_time || '');
+                if (relatedLessonsWrap && data.related_html) {
+                    relatedLessonsWrap.innerHTML = data.related_html;
+                }
+            }
+        } catch (error) {
+            typingRow.remove();
+            appendBotMessage('Không gửi được câu hỏi. Hãy kiểm tra lại kết nối hoặc thử tải lại trang.', new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+        } finally {
+            button.disabled = false;
+            button.classList.remove('send-btn-loading');
+            scrollChatToBottom();
+        }
+    });
+}
 </script>
 <?php include __DIR__ . '/../includes/footer.php'; ?>

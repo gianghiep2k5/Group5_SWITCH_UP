@@ -32,6 +32,11 @@ if ($class_id) {
 }
 
 $selected_student_id = (int)($_GET['student_id'] ?? 0);
+// v13: make chat history visible immediately. If no student is selected,
+// automatically select the first student in the chosen class.
+if (!$selected_student_id && $students) {
+    $selected_student_id = (int)$students[0]['student_id'];
+}
 $selected_student = null;
 if ($selected_student_id && $class_id) {
     $stmt = $pdo->prepare(
@@ -45,7 +50,11 @@ if ($selected_student_id && $class_id) {
     $stmt->execute([$class_id, $user['id'], $selected_student_id]);
     $selected_student = $stmt->fetch();
     if (!$selected_student) {
-        $selected_student_id = 0;
+        $selected_student_id = $students ? (int)$students[0]['student_id'] : 0;
+        if ($selected_student_id) {
+            $stmt->execute([$class_id, $user['id'], $selected_student_id]);
+            $selected_student = $stmt->fetch();
+        }
     }
 }
 
@@ -91,19 +100,19 @@ if ($selected_student_id) {
 
 include __DIR__ . '/../includes/header.php';
 ?>
-<div class="grid grid-2 class-student-layout">
-    <div class="card">
-        <div class="card-head">
+<div class="teacher-history-page">
+    <section class="card teacher-member-card">
+        <div class="card-head compact-head">
             <div>
                 <h2>Class Members</h2>
-                <p class="page-intro">View students in your assigned classes. Student accounts and enrollment are managed by Admin.</p>
+                <p class="page-intro">Select a student to review their learning conversation.</p>
             </div>
         </div>
 
         <?php if (!$classes): ?>
             <p class="muted">No class has been assigned to you yet.</p>
         <?php else: ?>
-            <form method="get" class="filter-bar">
+            <form method="get" class="filter-bar teacher-class-filter">
                 <div class="field">
                     <label>Class</label>
                     <select name="class_id" onchange="this.form.submit()">
@@ -114,72 +123,97 @@ include __DIR__ . '/../includes/header.php';
                 </div>
             </form>
 
-            <div class="table-wrap soft-table">
-                <table class="table compact">
-                    <tr><th>Student</th><th>Email</th><th>Status</th><th>Joined</th><th>View</th></tr>
-                    <?php foreach($students as $row): ?>
-                        <tr class="<?= $selected_student_id === (int)$row['student_id'] ? 'selected-row' : '' ?>">
-                            <td><b><?= e($row['full_name']) ?></b></td>
-                            <td><?= e($row['email']) ?></td>
-                            <td><?= badge($row['status'], $row['status'] === 'active' ? 'low' : 'medium') ?></td>
-                            <td><?= e(date('d M Y', strtotime($row['joined_at']))) ?></td>
-                            <td>
-                                <a class="btn ghost btn-sm" href="?class_id=<?= (int)$class_id ?>&student_id=<?= (int)$row['student_id'] ?>">History</a>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    <?php if (!$students): ?>
-                        <tr><td colspan="5" class="muted">No students in this class.</td></tr>
-                    <?php endif; ?>
-                </table>
+            <div class="student-list clean-student-list">
+                <?php foreach($students as $row): ?>
+                    <a class="student-list-item <?= $selected_student_id === (int)$row['student_id'] ? 'active' : '' ?>" href="?class_id=<?= (int)$class_id ?>&student_id=<?= (int)$row['student_id'] ?>">
+                        <div class="student-avatar-small"><?= e(strtoupper(substr($row['full_name'], 0, 1))) ?></div>
+                        <div class="student-info">
+                            <strong><?= e($row['full_name']) ?></strong>
+                            <span><?= e($row['email']) ?></span>
+                        </div>
+                        <div class="student-meta">
+                            <?= badge($row['status'], $row['status'] === 'active' ? 'low' : 'medium') ?>
+                            <small><?= e(date('d M Y', strtotime($row['joined_at']))) ?></small>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+                <?php if (!$students): ?>
+                    <div class="empty-state mini-empty">
+                        <div class="empty-icon">◇</div>
+                        <p>No students in this class.</p>
+                    </div>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
-    </div>
+    </section>
 
-    <div class="card">
-        <div class="card-head">
+    <section class="card teacher-chat-card">
+        <div class="card-head compact-head">
             <div>
-                <h2>Learning History</h2>
-                <p class="page-intro">Review chatbot sessions to understand what the student is struggling with.</p>
+                <h2>Chat History</h2>
+                <p class="page-intro">Read the selected student's chatbot conversation.</p>
             </div>
         </div>
 
         <?php if (!$selected_student): ?>
-            <div class="empty-state">
+            <div class="empty-state teacher-empty-chat">
                 <div class="empty-icon">◇</div>
                 <p>Choose a student from the class list to view their chat history.</p>
             </div>
         <?php else: ?>
-            <div class="student-summary">
-                <div>
-                    <strong><?= e($selected_student['full_name']) ?></strong>
-                    <span><?= e($selected_student['email']) ?></span>
+            <div class="chat-history-top">
+                <div class="selected-student-block">
+                    <div class="student-avatar-large"><?= e(strtoupper(substr($selected_student['full_name'], 0, 1))) ?></div>
+                    <div>
+                        <strong><?= e($selected_student['full_name']) ?></strong>
+                        <span><?= e($selected_student['email']) ?></span>
+                    </div>
                 </div>
                 <?= badge($selected_student['status'], $selected_student['status'] === 'active' ? 'low' : 'medium') ?>
             </div>
 
             <?php if (!$sessions): ?>
-                <p class="muted">This student has no chatbot session yet.</p>
-            <?php else: ?>
-                <div class="session-tabs">
-                    <?php foreach($sessions as $s): ?>
-                        <a class="session-pill <?= $view_session_id === (int)$s['id'] ? 'active' : '' ?>" href="?class_id=<?= (int)$class_id ?>&student_id=<?= (int)$selected_student_id ?>&session_id=<?= (int)$s['id'] ?>">
-                            <b><?= e($s['title'] ?: 'Untitled session') ?></b>
-                            <span><?= (int)$s['message_count'] ?> messages · <?= e(date('d M H:i', strtotime($s['started_at']))) ?></span>
-                        </a>
-                    <?php endforeach; ?>
+                <div class="empty-state teacher-empty-chat">
+                    <div class="empty-icon">◇</div>
+                    <p>This student has no chatbot session yet.</p>
                 </div>
+            <?php else: ?>
+                <form method="get" class="session-select-bar">
+                    <input type="hidden" name="class_id" value="<?= (int)$class_id ?>">
+                    <input type="hidden" name="student_id" value="<?= (int)$selected_student_id ?>">
+                    <label>Conversation</label>
+                    <select name="session_id" onchange="this.form.submit()">
+                        <?php foreach($sessions as $s): ?>
+                            <option value="<?= (int)$s['id'] ?>" <?= selected($view_session_id, $s['id']) ?>>
+                                <?= e(($s['title'] ?: 'Untitled session') . ' · ' . (int)$s['message_count'] . ' messages · ' . date('d M H:i', strtotime($s['started_at']))) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
 
-                <div class="chat-box teacher-chat-box">
+                <div class="teacher-conversation-box">
                     <?php foreach($messages as $m): ?>
-                        <div class="msg <?= e($m['sender']) ?>">
-                            <?= e($m['content']) ?>
-                            <br><small class="muted">Topic: <?= e($m['topic_name'] ?? '-') ?> · Lesson: <?= e($m['lesson_title'] ?? '-') ?></small>
+                        <?php $isStudent = $m['sender'] === 'student'; ?>
+                        <div class="teacher-chat-row <?= $isStudent ? 'from-student' : 'from-ai' ?>">
+                            <div class="chat-speaker"><?= $isStudent ? 'Student' : 'AI' ?></div>
+                            <div class="teacher-bubble">
+                                <div class="bubble-content"><?= nl2br(e($m['content'])) ?></div>
+                                <div class="bubble-meta">
+                                    <?= e(date('d M Y H:i', strtotime($m['created_at']))) ?>
+                                    <?php if (!empty($m['topic_name']) || !empty($m['lesson_title'])): ?>
+                                        · Topic: <?= e($m['topic_name'] ?? '-') ?>
+                                        · Lesson: <?= e($m['lesson_title'] ?? '-') ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                         </div>
                     <?php endforeach; ?>
+                    <?php if (!$messages): ?>
+                        <p class="muted">No messages in this conversation.</p>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         <?php endif; ?>
-    </div>
+    </section>
 </div>
 <?php include __DIR__ . '/../includes/footer.php'; ?>

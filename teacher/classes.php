@@ -23,7 +23,7 @@ include __DIR__ . '/../includes/header.php';
 <div class="card">
     <div class="card-head">
         <div><h2>Class Overview</h2><p class="page-intro">A clean view of the classes assigned to you by the administrator.</p></div>
-        <div class="actions"><a class="btn ghost" href="<?= BASE_URL ?>/teacher/students.php">Manage students</a><a class="btn ghost" href="<?= BASE_URL ?>/teacher/schedules.php">Plan schedule</a></div>
+        <div class="actions"><a class="btn ghost" href="<?= BASE_URL ?>/teacher/students.php">View students</a><a class="btn ghost" href="<?= BASE_URL ?>/teacher/schedules.php">Plan schedule</a><a class="btn ghost" href="<?= BASE_URL ?>/teacher/lessons.php">Learning content</a></div>
     </div>
     <?php if (!$classes): ?><div class="empty-state">No class has been assigned to you yet.</div><?php endif; ?>
     <?php if ($classes): ?><div class="grid grid-3">
